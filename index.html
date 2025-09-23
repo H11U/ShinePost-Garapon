@@ -674,13 +674,6 @@ function shareToX(){
   window.open(intent, "_blank", "noopener,noreferrer");
 }
 
-
-async function shareNative(){
-  try{
-    await navigator.share({ title: "シャインポスト・ライブ抽選機", text: "抽選機で遊ぼう！", url: getBaseUrl() });
-  }catch(e){ /* キャンセル等は無視 */ }
-}
-
 document.querySelector("#shareX").addEventListener("click", shareToX);
 allowSameChk.checked = false; // デフォルト：同名禁止
 renderLocks();
