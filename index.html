@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>シャインポスト｜ライブメンバー抽選機</title>
+<meta property="og:type" content="website">
+<meta property="og:title" content="シャインポスト｜ライブメンバー抽選機">
+<meta property="og:description" content="抽選ボタンひとつで、5人のラインナップと5曲のセットリストをランダム生成！固定や同名曲許可も対応。">
+<meta property="og:url" content="https://username.github.io/shine-draw/"><!-- ←あなたの公開URLに置換 -->
+<meta property="og:image" content="https://username.github.io/shine-draw/og-image.png"><!-- OG画像があれば置換 -->
+<meta name="twitter:card" content="summary_large_image">
+
+<style>
+  :root { --gap: 12px; --radius: 10px; --shadow: 0 8px 24px rgba(0,0,0,.08); }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", Arial, sans-serif; margin: 0; background:#f7f7fb; color:#222; }
+  header { padding: 20px clamp(16px, 4vw, 40px); background: white; box-shadow: var(--shadow); position: sticky; top: 0; z-index: 5; }
+  header h1 { margin: 0; font-size: clamp(18px, 2.2vw, 22px); }
+  main { padding: 20px clamp(16px, 4vw, 40px); display: grid; gap: var(--gap); }
+  .card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; }
+  .row { display: flex; gap: var(--gap); align-items: center; flex-wrap: wrap; }
+  .row > * { flex: none; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+  @media (max-width: 1100px){ .grid{ grid-template-columns: 1fr; } }
+  button { padding: 10px 14px; border: 0; border-radius: 8px; background: #4f46e5; color: white; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(79,70,229,.2); }
+  button.secondary { background:#0ea5e9; }
+  button.ghost { background:#e5e7eb; color:#111; }
+  .pill { display:inline-flex; gap:8px; align-items:center; padding:6px 10px; border-radius:999px; background:#eef2ff; color:#3730a3; font-size:12px; }
+  .switch { display:inline-flex; align-items:center; gap:6px; font-size:12px; }
+  .error { color:#b91c1c; background:#fee2e2; border:1px solid #fecaca; padding:10px; border-radius:8px; white-space:pre-wrap; }
+  .success { color:#065f46; background:#d1fae5; border:1px solid #a7f3d0; padding:10px; border-radius:8px; white-space:pre-wrap; }
+  .muted { color:#555; font-size:12px; }
+  .list { display:grid; gap:10px; }
+  .chip { padding:6px 10px; border:1px solid #e5e7eb; border-radius:999px; background:#fff; font-size:12px; }
+  .sep { height:1px; background:#eee; margin:10px 0; }
+  .col { display: grid; gap: 10px; }
+  .scroll { max-height: 360px; overflow: auto; border:1px solid #eee; border-radius:8px; padding:8px; }
+  .item { display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:8px; }
+  .item:hover { background:#fafafa; }
+  .section-title { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .small { font-size:12px; }
+
+  /* 横並びラインナップ */
+  .lineup { display:grid; gap:8px; }
+  .lineup-row { display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap:8px; align-items:center; }
+  .lineup-num { text-align:center; font-weight:700; background:#eef2ff; border-radius:8px; padding:4px 0; }
+  .lineup-name { text-align:center; }
+
+  /* 結果ブロック内のチェックUI */
+  .pos-lock { display:inline-flex; align-items:center; gap:6px; margin-top:6px; }
+  .perf-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+  .perf-item { display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border:1px solid #e5e7eb; border-radius:999px; background:#fff; }
+  .disabled { opacity:.5; pointer-events:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>シャインポスト｜ライブメンバー抽選機</h1>
+</header>
+
+<main>
+  <!-- 抽選結果（最上部） -->
+  <section class="card">
+    <h2>抽選結果</h2>
+    <div id="results"></div>
+    <div id="msg" style="margin-top:10px"></div>
+  </section>
+
+  <!-- 操作 -->
+  <section class="card">
+    <div class="row">
+      <span class="pill">操作</span>
+      <button id="run">抽選する（毎回ランダム）</button>
+      <button id="share" class="secondary">共有リンクをコピー</button>
+      <button id="clearLocks" class="ghost">固定を全て解除</button>
+      <button id="shareX" class="ghost">Xで共有</button>
+      <label class="switch">
+        <input type="checkbox" id="allowSame" />
+        <span>同名曲（titleKey）を許可</span>
+      </label>
+      <span class="muted small">※ シード入力は不要。ボタンを押すたびに結果が変わります。</span>
+    </div>
+  </section>
+
+  <!-- 固定パネル -->
+  <section class="grid">
+    <div class="card col">
+      <div class="section-title">
+        <h2>メンバー固定（最大5名まで）</h2>
+        <span class="muted small" id="lockMemberCount"></span>
+      </div>
+      <div id="membersLock" class="scroll"></div>
+    </div>
+
+    <div class="card col">
+      <div class="section-title">
+        <h2>曲固定（variant単位・最大5曲まで）</h2>
+        <span class="muted small" id="lockSongCount"></span>
+      </div>
+      <div id="songsLock" class="scroll"></div>
+      <div class="muted small">※ デフォルトでは同名（titleKey）重複は不可。スイッチONで同名の別バージョンも同居可。</div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* =========================
+   データ（内蔵）
+========================= */
+const DATA_VERSION = "v1";
+
+/* メンバー23名（idは内部用。画面にはnameのみ表示） */
+const MEMBERS = [
+  { "id": "mem_001", "name": "（青天目　春）" },
+  { "id": "mem_002", "name": "（玉城　杏夏）" },
+  { "id": "mem_003", "name": "（聖舞　理王）" },
+  { "id": "mem_004", "name": "（伊藤　紅葉）" },
+  { "id": "mem_005", "name": "（祇園寺　雪音）" },
+  { "id": "mem_006", "name": "（黒金　蓮）" },
+  { "id": "mem_007", "name": "（唐林　青葉）" },
+  { "id": "mem_008", "name": "（唐林　絃葉）" },
+  { "id": "mem_009", "name": "（氷海　菜花）" },
+  { "id": "mem_010", "name": "（苗川　柔）" },
+  { "id": "mem_011", "name": "（兎塚　七海）" },
+  { "id": "mem_012", "name": "（陽本　日夏）" },
+  { "id": "mem_013", "name": "（梨子木　麗美）" },
+  { "id": "mem_014", "name": "（ナターリャ）" },
+  { "id": "mem_015", "name": "（広瀬　実唯菜）" },
+  { "id": "mem_016", "name": "（琴森　愛莉）" },
+  { "id": "mem_017", "name": "（南崎　湊）" },
+  { "id": "mem_018", "name": "（薬師院　亜珠花）" },
+  { "id": "mem_019", "name": "（東江　凪）" },
+  { "id": "mem_020", "name": "（風祭　朝陽）" },
+  { "id": "mem_021", "name": "（山田　花音）" },
+  { "id": "mem_022", "name": "（小紫　桃果）" },
+  { "id": "mem_023", "name": "（篁　響季）" }
+];
+
+/* 曲45件（variantId / title / titleKey / members） */
+const SONG_VARIANTS = [
+  { "variantId": "songv_001", "title": "（TOKYO WATASHI COLLECTION）", "titleKey": "（Tokyo_Watashi_Collection）", "members": 5 },
+  { "variantId": "songv_002", "title": "（TOKYO WATASHI COLLECTION(3人用)）", "titleKey": "（Tokyo_Watashi_Collection）", "members": 3 },
+  { "variantId": "songv_003", "title": "（一歩前ノセカイ）", "titleKey": "（Ippo_Mae_No_Sekai）", "members": 5 },
+
+  { "variantId": "songv_004", "title": "（一歩前ノセカイ(3人用)）", "titleKey": "（Ippo_Mae_No_Sekai）", "members": 3 },
+  { "variantId": "songv_005", "title": "（Yellow Rose）", "titleKey": "（Yellow_Rose）", "members": 5 },
+
+  { "variantId": "songv_006", "title": "（Yellow Rose(3人用)）", "titleKey": "（Yellow_Rose）", "members": 3 },
+  { "variantId": "songv_007", "title": "（GYB!!）", "titleKey": "（GYB）", "members": 5 },
+
+  { "variantId": "songv_008", "title": "（Be Your Light!!）", "titleKey": "（Be_Your_Light）", "members": 5 },
+  { "variantId": "songv_009", "title": "（Snow Leaves）", "titleKey": "（Snow_Leaves）", "members": 5 },
+  { "variantId": "songv_010", "title": "（春風に乗って）", "titleKey": "（Harukaze_Ni_Notte）", "members": 5 },
+
+  { "variantId": "songv_011", "title": "（Life goes on!）", "titleKey": "（Life_Goes_On）", "members": 5 },
+  { "variantId": "songv_012", "title": "（Misty=Missing You）", "titleKey": "（Misty_Missing_You）", "members": 5 },
+  { "variantId": "songv_013", "title": "（ワンダー・スターター）", "titleKey": "（Wonder_Starter）", "members": 5 },
+  { "variantId": "songv_014", "title": "（パレットガールズ）", "titleKey": "（Palette_Girls）", "members": 5 },
+  { "variantId": "songv_015", "title": "（FiRST STEP）", "titleKey": "（First_Step）", "members": 5 },
+
+  { "variantId": "songv_016", "title": "（FiRST STEP(3人用)）", "titleKey": "（First_Step）", "members": 3 },
+  { "variantId": "songv_017", "title": "（恋のフリーマーケット）", "titleKey": "（Koi_No_Freemarket）", "members": 5 },
+  { "variantId": "songv_018", "title": "（恋のフリーマーケット(3人用)）", "titleKey": "（Koi_No_Freemarket）", "members": 3 },
+  { "variantId": "songv_019", "title": "（恋のフリーマーケット(2人用)）", "titleKey": "（Koi_No_Freemarket）", "members": 2 },
+  { "variantId": "songv_020", "title": "（Rain of BulletsXX）", "titleKey": "（Rain_of_Bulletsxx）", "members": 5 },
+
+  { "variantId": "songv_021", "title": "（0 to Infinity）", "titleKey": "（zero_to_Infinity）", "members": 5 },
+  { "variantId": "songv_022", "title": "（0 to Infinity(3人用)）", "titleKey": "（zero_to_Infinity）", "members": 3 },
+  { "variantId": "songv_023", "title": "（0 to Infinity(2人用）", "titleKey": "（zero_to_Infinity）", "members": 2 },
+  { "variantId": "songv_024", "title": "（絶対王者チョコレート）", "titleKey": "（Zettaiouja_Chocolate）", "members": 2 },
+  { "variantId": "songv_025", "title": "（You're not..mine）", "titleKey": "（Youre_not_mine）", "members": 5 },
+
+  { "variantId": "songv_026", "title": "（Innocent Sky）", "titleKey": "（Innocent_Sky）", "members": 5 },
+  { "variantId": "songv_027", "title": "（キラキラキュン(2人用)）", "titleKey": "（Kirakirakyun）", "members": 2 },
+  { "variantId": "songv_028", "title": "（ゆらゆらワンダフルワールド）", "titleKey": "（Yurayura_Wonderful_World）", "members": 5 },
+  { "variantId": "songv_029", "title": "（ゆらゆらワンダフルワールド(2人用)）", "titleKey": "（Yurayura_Wonderful_World）", "members": 2 },
+  { "variantId": "songv_030", "title": "（ボーダーライト）", "titleKey": "（Border_Light）", "members": 5 },
+
+  { "variantId": "songv_031", "title": "（ボーダーライト(3人用)）", "titleKey": "（Border_Light）", "members": 3 },
+  { "variantId": "songv_032", "title": "（Go my way,Go your way）", "titleKey": "（Go_My_Way_Go_Your_Way）", "members": 5 },
+  { "variantId": "songv_033", "title": "（シーサイド・ブルー）", "titleKey": "（SeaSide_Blue）", "members": 5 },
+  { "variantId": "songv_034", "title": "（Positive $ Smile(2人用)）", "titleKey": "（Positive_Smile）", "members": 2 },
+  { "variantId": "songv_035", "title": "（GOOD BYE SWEET DAYS）", "titleKey": "（Good_Bye_Sweet_Days）", "members": 5 },
+
+  { "variantId": "songv_036", "title": "（GOOD BYE SWEET DAYS(3人用)）", "titleKey": "（Good_Bye_Sweet_Days）", "members": 3 },
+  { "variantId": "songv_037", "title": "（ワンツースリーで手をたたこう!(2人用)）", "titleKey": "（Onetwothree_De_Teo_Tatako）", "members": 2 },
+  { "variantId": "songv_038", "title": "（ACROSS THE UNIVERSE）", "titleKey": "（Across_The_Universe）", "members": 5 },
+  { "variantId": "songv_039", "title": "（ACROSS THE UNIVERSE(3人用)）", "titleKey": "（Across_The_Universe）", "members": 3 },
+  { "variantId": "songv_040", "title": "（Light）", "titleKey": "（Light）", "members": 5 },
+
+  { "variantId": "songv_041", "title": "（あの日の夢を(2人用)）", "titleKey": "（Ano_Hi_no_Yumewo）", "members": 2 },
+  { "variantId": "songv_042", "title": "（O・NE・GA・I⭐︎WISH）", "titleKey": "（Onegai_Wish）", "members": 5 },
+  { "variantId": "songv_043", "title": "（O・NE・GA・I⭐︎WISH(3人用)）", "titleKey": "（Onegai_Wish）", "members": 3 },
+  { "variantId": "songv_044", "title": "（Hello, My Sunshine）", "titleKey": "（Hello_My_Sunshine）", "members": 5 },
+  { "variantId": "songv_045", "title": "（僕たちには歌がある(2人用)）", "titleKey": "（Bokutachi_Niwa_Uta_Ga_Aru）", "members": 3 }
+];
+
+/* =========================
+   RNG
+========================= */
+function cyrb32(str){ let h=0x811c9dc5; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,0x01000193); h>>>=0; } return h>>>0; }
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function rngFor(seed, ns){ return mulberry32(cyrb32(String(seed)+"::"+String(ns))); }
+function shuffleDet(arr, rand){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(rand()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function makeRandomSeed(){ const r=crypto.getRandomValues(new Uint32Array(2)); return "seed-"+r[0].toString(36)+"-"+r[1].toString(36); }
+
+/* =========================
+   抽選本体（variant固定・位置固定・出演者固定対応）
+========================= */
+function drawShow({ seed, members, variants, allowSame, lockedMemberIds, lockedVariantIds, lockedSetPos, lockedPerformers }){
+  const errors = [];
+
+  // 1) ラインナップ（固定メンバー優先）
+  const forcedMembers = new Set(lockedMemberIds);
+  // 出演者固定で指定されたメンバーも必ず採用（重複はSetで吸収）
+  for (const arr of Object.values(lockedPerformers)){ (arr||[]).forEach(id => forcedMembers.add(id)); }
+  if (forcedMembers.size > 5) return { errors: ["固定されたメンバー（出演者固定由来を含む）が5名を超えています。"] };
+
+  const rngMembers = rngFor(seed, "members");
+  const fm = members.filter(m => forcedMembers.has(m.id));
+  const remain = members.filter(m => !forcedMembers.has(m.id));
+  const lineup = fm.concat(shuffleDet(remain, rngMembers)).slice(0,5);
+
+  // 2) 選曲（位置固定優先 → 採用固定 → ランダム補完）
+  const byId = new Map(variants.map(v => [v.variantId, v]));
+  const usedTitleKeys = new Set(); // allowSame=false なら使用済み管理
+  const result = new Array(5).fill(null);
+
+  // 2-1) 位置固定配置
+  for (let pos=0; pos<5; pos++){
+    const vid = lockedSetPos[pos];
+    if (!vid) continue;
+    const v = byId.get(vid); if (!v) continue;
+    result[pos] = v;
+    if (!allowSame) usedTitleKeys.add(v.titleKey);
+  }
+
+  // 2-2) 採用固定（位置未指定）をランダム順で残枠へ
+  const rngLockOrder = rngFor(seed, "songs:lockedOrder");
+  const lockedList = shuffleDet(Array.from(lockedVariantIds).map(id => byId.get(id)).filter(Boolean), rngLockOrder);
+  for (const v of lockedList){
+    // 既に置かれている同variantはスキップ
+    if (result.some(x => x && x.variantId === v.variantId)) continue;
+    if (!allowSame && usedTitleKeys.has(v.titleKey)) continue;
+    // 空き位置をランダムに選んで配置
+    const empties = result.map((x,i)=>[x,i]).filter(([x])=>!x).map(([,i])=>i);
+    if (!empties.length) break;
+    const idx = Math.floor(rngLockOrder()*empties.length);
+    const pos = empties[idx];
+    result[pos] = v;
+    if (!allowSame) usedTitleKeys.add(v.titleKey);
+  }
+
+  // 2-3) ランダム補完
+  const rngFill = rngFor(seed, "songs:fill");
+  const pool = shuffleDet(variants, rngFill).filter(v => {
+    if (result.some(x => x && x.variantId === v.variantId)) return false;
+    if (!allowSame && usedTitleKeys.has(v.titleKey)) return false;
+    return true;
+  });
+  for (let pos=0; pos<5; pos++){
+    if (result[pos]) continue;
+    const next = pool.shift();
+    if (!next) { errors.push("曲プールが不足しています。"); break; }
+    result[pos] = next;
+    if (!allowSame) usedTitleKeys.add(next.titleKey);
+  }
+  if (errors.length) return { errors };
+
+  // 3) 出演者割当（出演者固定は順序も固定）
+  const setlist = result.map((v, pos) => {
+    const r = v.members;
+    const locked = (lockedPerformers[pos] || []).filter(id => lineup.some(m => m.id===id));
+    const remainIds = lineup.map(m=>m.id).filter(id => !locked.includes(id));
+    const rand = rngFor(seed, `assign:${pos}`);
+    const fill = shuffleDet(remainIds, rand).slice(0, Math.max(0, r - locked.length));
+    const performers = locked.concat(fill).slice(0, r);
+    return {
+      variantId: v.variantId,
+      title: v.title,
+      titleKey: v.titleKey,
+      requiredMembers: r,
+      performers
+    };
+  });
+
+  return { lineup, setlist };
+}
+
+/* =========================
+   UI生成・状態
+========================= */
+const msg = document.querySelector("#msg");
+const results = document.querySelector("#results");
+const lockMemberCount = document.querySelector("#lockMemberCount");
+const lockSongCount = document.querySelector("#lockSongCount");
+const membersLockEl = document.querySelector("#membersLock");
+const songsLockEl = document.querySelector("#songsLock");
+const allowSameChk = document.querySelector("#allowSame");
+
+let lastSeed = "";                             // 直近のシード
+let lockedSetPos = { 0:null, 1:null, 2:null, 3:null, 4:null }; // pos→variantId
+let lockedPerformers = { 0:[], 1:[], 2:[], 3:[], 4:[] };        // pos→memberId[]
+
+function setStatus(html, kind=""){
+  msg.className = kind ? kind : "";
+  msg.innerHTML = html || "";
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&lt;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
+
+/* --- 固定パネル描画 --- */
+function renderLocks(){
+  // メンバー固定（最大5）
+  membersLockEl.innerHTML = MEMBERS.map(m => `
+    <label class="item">
+      <input type="checkbox" class="lock-m" value="${m.id}" />
+      <span>${escapeHtml(m.name)}</span>
+    </label>
+  `).join("");
+
+  // 曲固定（variant単位・最大5）
+  songsLockEl.innerHTML = SONG_VARIANTS.map(v => `
+    <label class="item">
+      <input type="checkbox" class="lock-s" value="${v.variantId}" data-titlekey="${escapeHtml(v.titleKey)}" />
+      <span>${escapeHtml(v.title)} <span class="muted small">/ ${v.members}人</span></span>
+    </label>
+  `).join("");
+
+  updateLockCounters();
+  enforceMemberLimitUI();
+  enforceSongLimitAndTitleRuleUI();
+}
+
+/* --- チェック数・UI制御 --- */
+function getLockedMemberIds(){ return Array.from(document.querySelectorAll(".lock-m:checked")).map(el=>el.value); }
+function getLockedVariantIds(){ return Array.from(document.querySelectorAll(".lock-s:checked")).map(el=>el.value); }
+function getVariantById(id){ return SONG_VARIANTS.find(v => v.variantId === id); }
+
+function enforceMemberLimitUI(){
+  const checked = getLockedMemberIds();
+  lockMemberCount.textContent = `選択中：${checked.length}/5`;
+  const limitReached = checked.length >= 5;
+  document.querySelectorAll(".lock-m").forEach(el => {
+    if (!el.checked) el.disabled = limitReached; else el.disabled = false;
+  });
+}
+
+function enforceSongLimitAndTitleRuleUI(){
+  const allowSame = allowSameChk.checked;
+  const checked = getLockedVariantIds();
+  lockSongCount.textContent = `選択中：${checked.length}/5`;
+  const limitReached = checked.length >= 5;
+
+  // 同名禁止時：titleKeyごとに1件のみ許可
+  const checkedByKey = new Map();
+  checked.forEach(vid => {
+    const key = getVariantById(vid)?.titleKey;
+    if (!key) return;
+    if (!checkedByKey.has(key)) checkedByKey.set(key, []);
+    checkedByKey.get(key).push(vid);
+  });
+
+  document.querySelectorAll(".lock-s").forEach(el => {
+    const vid = el.value;
+    const key = el.getAttribute("data-titlekey");
+    if (el.checked){
+      el.disabled = false; // 既に選ばれているものは常に有効
+    } else {
+      // 6個目のチェックは禁止
+      if (limitReached) { el.disabled = true; return; }
+      // 同名禁止なら、同titleKeyが既に1つでも選ばれていたら禁止
+      if (!allowSame && checkedByKey.has(key)) { el.disabled = true; return; }
+      el.disabled = false;
+    }
+  });
+
+  // allowSameがOFFに切り替わった際、もし同keyで複数チェック済なら先勝ち残し
+  if (!allowSame){
+    checkedByKey.forEach((list, key) => {
+      if (list.length > 1){
+        // 先頭以外を外す
+        list.slice(1).forEach(vid => {
+          const box = document.querySelector(`.lock-s[value="${CSS.escape(vid)}"]`);
+          if (box){ box.checked = false; }
+          // 連動解除：位置固定・出演者固定にそのvariantがあれば解除
+          for (let pos=0; pos<5; pos++){
+            if (lockedSetPos[pos] === vid) lockedSetPos[pos] = null;
+            if ((lockedPerformers[pos]||[]).length){
+              // その曲がvidで固定されていた場合のみ出演者固定を解除
+              // （曲がまだ決まっていないので、描画時にposがvidでないなら自然に外れる）
+            }
+          }
+        });
+      }
+    });
+  }
+}
+
+/* --- イベント（固定パネル） --- */
+document.addEventListener("change", (e)=>{
+  if (e.target.matches(".lock-m")){
+    // 6人目は無効（UIで弾いているが、直接属性書換対策で二重ガード）
+    if (getLockedMemberIds().length > 5){ e.target.checked = false; }
+    // パネルからメンバーを外したら、出演者固定にも反映して外す
+    if (!e.target.checked){
+      const removedId = e.target.value;
+      for (let pos=0; pos<5; pos++){
+        if (lockedPerformers[pos]) lockedPerformers[pos] = lockedPerformers[pos].filter(id => id !== removedId);
+      }
+    }
+    enforceMemberLimitUI();
+  }
+
+  if (e.target.matches(".lock-s")){
+    // 6曲目は禁止
+    if (getLockedVariantIds().length > 5){ e.target.checked = false; }
+    enforceSongLimitAndTitleRuleUI();
+
+    // 曲を外したら、同variantの位置固定と出演者固定も解除（同期）
+    if (!e.target.checked){
+      const vid = e.target.value;
+      for (let pos=0; pos<5; pos++){
+        if (lockedSetPos[pos] === vid) lockedSetPos[pos] = null;
+        // 出演者固定は「その位置の曲がvidである場合のみ」意味があるため、
+        // 明示解除までは保持。次回描画時に曲が違えば無効化される。
+      }
+    }
+  }
+
+  if (e.target === allowSameChk){
+    enforceSongLimitAndTitleRuleUI();
+  }
+});
+
+/* =========================
+   結果描画（横並びラインナップ／位置＆出演者固定UI）
+========================= */
+function renderResult({ lineup, setlist, errors }){
+  if (errors && errors.length){
+    setStatus(errors.map(e => "• " + escapeHtml(e)).join("\n"), "error");
+    results.innerHTML = "";
+    return;
+  }
+  setStatus("抽選完了！結果は下記。次の抽選で固定が反映されます。", "success");
+
+  const nameById = new Map(MEMBERS.map(m => [m.id, m.name]));
+  // ラインナップ横並び（番号段＋名前段）
+  const numbersRow = `<div class="lineup-row">${[1,2,3,4,5].map(n=>`<div class="lineup-num">${n}</div>`).join("")}</div>`;
+  const namesRow   = `<div class="lineup-row">${lineup.map(m=>`<div class="lineup-name">${escapeHtml(m.name)}</div>`).join("")}</div>`;
+  const lineupHtml = `<div class="lineup">${numbersRow}${namesRow}</div>`;
+
+  const setHtml = setlist.map((s, idx) => {
+    // この位置の曲が位置固定されているか（variantId一致）
+    const posLocked = (lockedSetPos[idx] && lockedSetPos[idx] === s.variantId);
+    // 出演者固定（この位置）
+    const perfLocked = lockedPerformers[idx] || [];
+    const cap = s.requiredMembers;
+
+    const perfHtml = `
+      <div class="perf-list" data-pos="${idx}" data-cap="${cap}">
+        ${s.performers.map(pid => {
+          const checked = perfLocked.includes(pid) ? "checked" : "";
+          // cap超過にならないようにUI側でも無効化
+          const currentLockedCount = perfLocked.length;
+          const disable = (!checked && currentLockedCount >= cap) ? "disabled" : "";
+          return `
+            <label class="perf-item">
+              <input type="checkbox" class="lock-perf" data-pos="${idx}" data-variantid="${s.variantId}" data-memberid="${pid}" ${checked} ${disable} />
+              <span>${escapeHtml(nameById.get(pid) || "")}</span>
+            </label>
+          `;
+        }).join("")}
+      </div>
+    `;
+
+    return `
+      <li>
+        <div><strong>${escapeHtml(s.title)}</strong> <span class="muted">/ ${s.requiredMembers}人</span></div>
+        <label class="pos-lock">
+          <input type="checkbox" class="lock-pos" data-pos="${idx}" data-variantid="${s.variantId}" ${posLocked ? "checked":""} />
+          <span class="small">この曲をこの位置で固定</span>
+        </label>
+        ${perfHtml}
+      </li>
+    `;
+  }).join("");
+
+  results.innerHTML = `
+    <div class="list">
+      <div class="card">
+        <h3>ラインナップ（順番あり・5名）</h3>
+        ${lineupHtml}
+      </div>
+      <div class="card">
+        <h3>セットリスト（5曲）</h3>
+        <ol>${setHtml}</ol>
+      </div>
+    </div>
+  `;
+}
+
+/* --- 結果ブロック内のチェック操作（位置・出演者） --- */
+results.addEventListener("change", (e) => {
+  // 位置固定
+  if (e.target.matches(".lock-pos")){
+    const pos = Number(e.target.getAttribute("data-pos"));
+    const vid = e.target.getAttribute("data-variantid");
+    if (e.target.checked){
+      // 曲固定数（候補）に入るかチェック → 5曲超なら不可
+      const songBoxes = Array.from(document.querySelectorAll(".lock-s"));
+      const already = songBoxes.find(b => b.value === vid)?.checked;
+      const count = getLockedVariantIds().length;
+      if (!already && count >= 5){
+        e.target.checked = false; // 6個目は無効
+        return;
+      }
+      // 候補側もON（同期）
+      const box = document.querySelector(`.lock-s[value="${CSS.escape(vid)}"]`);
+      if (box){ box.checked = true; }
+      enforceSongLimitAndTitleRuleUI();
+
+      lockedSetPos[pos] = vid;
+    } else {
+      lockedSetPos[pos] = null; // 位置固定のみ解除（候補側はそのまま）
+    }
+  }
+
+  // 出演者固定
+  if (e.target.matches(".lock-perf")){
+    const pos = Number(e.target.getAttribute("data-pos"));
+    const vid = e.target.getAttribute("data-variantid");
+    const mid = e.target.getAttribute("data-memberid");
+    const cap = Number(e.target.closest(".perf-list").getAttribute("data-cap"));
+
+    if (e.target.checked){
+      // 曲固定（候補）もONにする（5曲上限チェック）
+      const countSong = getLockedVariantIds().length;
+      const songBox = document.querySelector(`.lock-s[value="${CSS.escape(vid)}"]`);
+      const alreadySong = songBox?.checked;
+      if (!alreadySong && countSong >= 5){
+        e.target.checked = false; return; // 6個目は禁止
+      }
+      if (songBox && !songBox.checked){
+        songBox.checked = true;
+        enforceSongLimitAndTitleRuleUI();
+      }
+      // 位置固定もON（上限なし）
+      lockedSetPos[pos] = vid;
+
+      // メンバー固定（候補）もON（5人上限チェック）
+      const countMem = getLockedMemberIds().length;
+      const memBox = document.querySelector(`.lock-m[value="${CSS.escape(mid)}"]`);
+      const alreadyMem = memBox?.checked;
+      if (!alreadyMem && countMem >= 5){
+        e.target.checked = false; return; // 6人目は禁止
+      }
+      if (memBox && !memBox.checked){
+        memBox.checked = true;
+        enforceMemberLimitUI();
+      }
+
+      // 出演者固定（順序は現在の表示順に従う）
+      const checkedIds = Array.from(e.target.closest(".perf-list").querySelectorAll(".lock-perf:checked"))
+        .map(el => el.getAttribute("data-memberid"));
+      if (checkedIds.length > cap){
+        e.target.checked = false; return; // cap超過は無効
+      }
+      lockedPerformers[pos] = checkedIds.slice(0, cap);
+      // 未チェック項目のdisable更新
+      refreshPerformerDisableForPos(pos, cap);
+    } else {
+      // OFF：このメンバーを外す
+      lockedPerformers[pos] = (lockedPerformers[pos] || []).filter(id => id !== mid);
+      refreshPerformerDisableForPos(pos, cap);
+    }
+  }
+});
+
+function refreshPerformerDisableForPos(pos, cap){
+  const wrapper = results.querySelector(`.perf-list[data-pos="${pos}"]`);
+  if (!wrapper) return;
+  const lockedCount = Array.from(wrapper.querySelectorAll(".lock-perf:checked")).length;
+  wrapper.querySelectorAll(".lock-perf").forEach(el => {
+    if (!el.checked) el.disabled = (lockedCount >= cap);
+    else el.disabled = false;
+  });
+}
+
+/* =========================
+   実行・共有
+========================= */
+function runOnce(){
+  // 抽選のたびに新しいシード
+  const seed = makeRandomSeed();
+  lastSeed = seed;
+
+  const allowSame = allowSameChk.checked;
+  const lockedMemberIds = getLockedMemberIds();
+  const lockedVariantIds = new Set(getLockedVariantIds());
+
+  const out = drawShow({
+    seed,
+    members: MEMBERS,
+    variants: SONG_VARIANTS,
+    allowSame,
+    lockedMemberIds,
+    lockedVariantIds,
+    lockedSetPos,
+    lockedPerformers
+  });
+  renderResult(out);
+}
+
+function shareLink(){
+  // 結果はURLに含めない（ベースURLのみ）
+  const base = location.origin + location.pathname;
+  navigator.clipboard.writeText(base)
+    .then(()=> setStatus("アプリURLをコピーしました。", "success"))
+    .catch(()=> setStatus("URLのコピーに失敗しました。手動で共有してください。", "error"));
+}
+
+/* =========================
+   起動
+========================= */
+document.querySelector("#run").addEventListener("click", runOnce);
+document.querySelector("#share").addEventListener("click", shareLink);
+document.querySelector("#clearLocks").addEventListener("click", () => {
+  // 固定解除：候補チェック／位置固定／出演者固定を全て初期化
+  document.querySelectorAll(".lock-m, .lock-s").forEach(el => { el.checked = false; el.disabled = false; });
+  lockedSetPos = {0:null,1:null,2:null,3:null,4:null};
+  lockedPerformers = {0:[],1:[],2:[],3:[],4:[]};
+  enforceMemberLimitUI();
+  enforceSongLimitAndTitleRuleUI();
+  setStatus("固定を全て解除しました。", "success");
+});
+function getBaseUrl(){
+  // 公開URLが決まっているなら固定文字列に：
+  // return "https://username.github.io/shine-draw/";  // ←公開後に置換推奨
+  // まだローカルなら現在のパスを使う：
+  return location.origin + location.pathname;
+}
+
+function shareToX(){
+  const url = encodeURIComponent(getBaseUrl());
+  const text = encodeURIComponent("シャインポスト・ライブ抽選機で遊ぼう！");
+  const hashtags = encodeURIComponent("シャインポスト,抽選,ライブ");
+  const via = ""; // 例: "your_account" にすると via 表示
+  const intent = `https://twitter.com/intent/tweet?text=${text}&url=${url}&hashtags=${hashtags}${via ? `&via=${encodeURIComponent(via)}` : ""}`;
+  window.open(intent, "_blank", "noopener,noreferrer");
+}
+
+async function shareNative(){
+  try{
+    await navigator.share({ title: "シャインポスト・ライブ抽選機", text: "抽選機で遊ぼう！", url: getBaseUrl() });
+  }catch(e){ /* キャンセル等は無視 */ }
+}
+
+document.querySelector("#shareX").addEventListener("click", shareToX);
+allowSameChk.checked = false; // デフォルト：同名禁止
+renderLocks();
+</script>
+</body>
+</html>
