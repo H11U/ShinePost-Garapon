@@ -111,30 +111,31 @@ const DATA_VERSION = "v1";
 
 /* メンバー23名（idは内部用。画面にはnameのみ表示） */
 const MEMBERS = [
-  { "id": "mem_001", "name": "（青天目　春）" },
-  { "id": "mem_002", "name": "（玉城　杏夏）" },
-  { "id": "mem_003", "name": "（聖舞　理王）" },
-  { "id": "mem_004", "name": "（伊藤　紅葉）" },
-  { "id": "mem_005", "name": "（祇園寺　雪音）" },
-  { "id": "mem_006", "name": "（黒金　蓮）" },
-  { "id": "mem_007", "name": "（唐林　青葉）" },
-  { "id": "mem_008", "name": "（唐林　絃葉）" },
-  { "id": "mem_009", "name": "（氷海　菜花）" },
-  { "id": "mem_010", "name": "（苗川　柔）" },
-  { "id": "mem_011", "name": "（兎塚　七海）" },
-  { "id": "mem_012", "name": "（陽本　日夏）" },
-  { "id": "mem_013", "name": "（梨子木　麗美）" },
-  { "id": "mem_014", "name": "（ナターリャ）" },
-  { "id": "mem_015", "name": "（広瀬　実唯菜）" },
-  { "id": "mem_016", "name": "（琴森　愛莉）" },
-  { "id": "mem_017", "name": "（南崎　湊）" },
-  { "id": "mem_018", "name": "（薬師院　亜珠花）" },
-  { "id": "mem_019", "name": "（東江　凪）" },
-  { "id": "mem_020", "name": "（風祭　朝陽）" },
-  { "id": "mem_021", "name": "（山田　花音）" },
-  { "id": "mem_022", "name": "（小紫　桃果）" },
-  { "id": "mem_023", "name": "（篁　響季）" }
+  { "id": "mem_001", "name": "（青天目　春）",       "firstName": "春" },
+  { "id": "mem_002", "name": "（玉城　杏夏）",       "firstName": "杏夏" },
+  { "id": "mem_003", "name": "（聖舞　理王）",       "firstName": "理王" },
+  { "id": "mem_004", "name": "（伊藤　紅葉）",       "firstName": "紅葉" },
+  { "id": "mem_005", "name": "（祇園寺　雪音）",     "firstName": "雪音" },
+  { "id": "mem_006", "name": "（黒金　蓮）",         "firstName": "蓮" },
+  { "id": "mem_007", "name": "（唐林　青葉）",       "firstName": "青葉" },
+  { "id": "mem_008", "name": "（唐林　絃葉）",       "firstName": "絃葉" },
+  { "id": "mem_009", "name": "（氷海　菜花）",       "firstName": "菜花" },
+  { "id": "mem_010", "name": "（苗川　柔）",         "firstName": "柔" },
+  { "id": "mem_011", "name": "（兎塚　七海）",       "firstName": "七海" },
+  { "id": "mem_012", "name": "（陽本　日夏）",       "firstName": "日夏" },
+  { "id": "mem_013", "name": "（梨子木　麗美）",     "firstName": "麗美" },
+  { "id": "mem_014", "name": "（ナターリャ）",       "firstName": "ナターリャ" },
+  { "id": "mem_015", "name": "（広瀬　実唯菜）",     "firstName": "実唯菜" },
+  { "id": "mem_016", "name": "（琴森　愛莉）",       "firstName": "愛莉" },
+  { "id": "mem_017", "name": "（南崎　湊）",         "firstName": "湊" },
+  { "id": "mem_018", "name": "（薬師院　亜珠花）",   "firstName": "亜珠花" },
+  { "id": "mem_019", "name": "（東江　凪）",         "firstName": "凪" },
+  { "id": "mem_020", "name": "（風祭　朝陽）",       "firstName": "朝陽" },
+  { "id": "mem_021", "name": "（山田　花音）",       "firstName": "花音" },
+  { "id": "mem_022", "name": "（小紫　桃果）",       "firstName": "桃果" },
+  { "id": "mem_023", "name": "（篁　響季）",         "firstName": "響季" }
 ];
+
 
 /* 曲45件（variantId / title / titleKey / members） */
 const SONG_VARIANTS = [
@@ -441,6 +442,7 @@ function renderResult({ lineup, setlist, errors }){
     results.innerHTML = "";
     return;
   }
+  currentResult = { lineup, setlist };
   setStatus("抽選完了！結果は下記。次の抽選で固定が反映されます。", "success");
 
   const nameById = new Map(MEMBERS.map(m => [m.id, m.name]));
@@ -633,21 +635,45 @@ document.querySelector("#clearLocks").addEventListener("click", () => {
   enforceSongLimitAndTitleRuleUI();
   setStatus("固定を全て解除しました。", "success");
 });
+// 公開URL（固定推奨：公開後にあなたのURLを入れてください）
 function getBaseUrl(){
-  // 公開URLが決まっているなら固定文字列に：
-  // return "https://username.github.io/shine-draw/";  // ←公開後に置換推奨
-  // まだローカルなら現在のパスを使う：
-  return location.origin + location.pathname;
+  return "https://H11U.github.io/ShinePost-Garapon/";
+}
+
+
+// メンバーID→firstName の辞書
+const FIRST_NAME_BY_ID = new Map(MEMBERS.map(m => [m.id, m.firstName || m.name]));
+
+// 結果からポスト用テキストを生成（firstNameのみ）
+function buildTweetText(result){
+  const lines = [];
+  lines.push("本日のセトリ!");
+  result.setlist.forEach((track, i) => {
+    const no = i + 1;
+    const title = track.title; // 例：（TOKYO ...（3人用））
+    const names = track.performers.map(id => FIRST_NAME_BY_ID.get(id) || "").join(" ");
+    lines.push(`${no}　${title}`);
+    lines.push(names);
+  });
+  lines.push(""); // 空行
+  lines.push(getBaseUrl());
+  lines.push("#シャインポスト");
+  return lines.join("\n");
 }
 
 function shareToX(){
-  const url = encodeURIComponent(getBaseUrl());
-  const text = encodeURIComponent("シャインポスト・ライブ抽選機で遊ぼう！");
-  const hashtags = encodeURIComponent("シャインポスト,抽選,ライブ");
-  const via = ""; // 例: "your_account" にすると via 表示
-  const intent = `https://twitter.com/intent/tweet?text=${text}&url=${url}&hashtags=${hashtags}${via ? `&via=${encodeURIComponent(via)}` : ""}`;
+  if (!currentResult){
+    setStatus("まずは抽選してください。", "error");
+    return;
+  }
+  const text = buildTweetText(currentResult);
+
+  // XのインテントURL生成
+  const url = "https://twitter.com/intent/tweet";
+  const intent = `${url}?text=${encodeURIComponent(text)}`;
   window.open(intent, "_blank", "noopener,noreferrer");
 }
+
 
 async function shareNative(){
   try{
