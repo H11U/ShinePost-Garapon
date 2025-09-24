@@ -500,7 +500,7 @@ function renderResult({ lineup, setlist, errors }){
     return;
   }
   currentResult = { lineup, setlist };
-  setStatus("抽選完了！結果は下記。次の抽選で固定が反映されます。", "success");
+  setStatus("抽選完了！", "success");
 
   const nameById = new Map(MEMBERS.map(m => [m.id, m.name]));
   // ラインナップ横並び（番号段＋名前段）
