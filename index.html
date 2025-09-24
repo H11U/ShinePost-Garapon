@@ -651,22 +651,21 @@ function buildTweetText(result){
   lines.push("本日のセトリ!");
   result.setlist.forEach((track, i) => {
     const no = i + 1;
+
     // 曲タイトル整形
     let title = track.title
       .replace("（2人用）", "②")
-      .replace("（3人用）", "③")
-      .replace("（5人用）", "⑤"); // 念のため
+      .replace("（3人用）", "③");
 
     // 出演者名（省略なし）
     const names = track.performers.map(id => FIRST_NAME_BY_ID.get(id) || "").join(" ");
 
-    // 5曲目のタイトルだけ省略処理
+    // 5曲目のタイトルは必ず末尾を省略
     if (i === 4) {
-      // 一旦追加して長さを見積もり
-      const previewLines = lines.concat([`${no}　${title}`, names, "", getBaseUrl(), "#シャインポスト"]);
-      const previewText = previewLines.join("\n");
-      if (previewText.length > 280) {
-        title = title.slice(0, 20) + "...";
+      if (title.length > 5) {
+        title = title.slice(0, title.length - 5) + "...";
+      } else {
+        title = title + "..."; // 念のため短い場合
       }
     }
 
@@ -677,19 +676,10 @@ function buildTweetText(result){
   lines.push(getBaseUrl());
   lines.push("#シャインポスト");
 
-  let text = lines.join("\n");
-
-  // 280文字超えた場合の再チェック（5曲目タイトル行を動的に探す）
-  if (text.length > 280) {
-    const idx = lines.findIndex(line => line.startsWith("5　"));
-    if (idx !== -1) {
-      lines[idx] = lines[idx].slice(0, 20) + "...";
-      text = lines.join("\n");
-    }
-  }
-
-  return text;
+  // 今回は280字制限チェックは外す
+  return lines.join("\n");
 }
+
 
 
 function shareToX(){
