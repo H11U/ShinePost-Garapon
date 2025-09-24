@@ -339,7 +339,7 @@ function renderLocks(){
     </label>
   `).join("");
 
-  // 曲固定（variant単位・最大5）
+  // 曲固定（最大5）
   songsLockEl.innerHTML = SONG_VARIANTS.map(v => `
     <label class="item">
       <input type="checkbox" class="lock-s" value="${v.variantId}" data-titlekey="${escapeHtml(v.titleKey)}" />
