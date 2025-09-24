@@ -662,12 +662,14 @@ function buildTweetText(result){
 
   let text = lines.join("\n");
 
-  // ★ 280字制限を超えたら切り詰める
-  if (text.length > 280) {
-    text = text.slice(0, 279) + "…";
+  // ★ 280字制限：Array.fromで正しくカウント
+  const chars = Array.from(text);
+  if (chars.length > 280) {
+    text = chars.slice(0, 279).join("") + "…";
   }
   return text;
 }
+
 
 
 function shareToX(){
