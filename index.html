@@ -7,8 +7,8 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="シャインポスト｜ライブメンバー抽選機">
 <meta property="og:description" content="抽選ボタンひとつで、5人のラインナップと5曲のセットリストをランダム生成！固定や同名曲許可も対応。">
-<meta property="og:url" content="https://username.github.io/shine-draw/"><!-- ←あなたの公開URLに置換 -->
-<meta property="og:image" content="https://username.github.io/shine-draw/og-image.png"><!-- OG画像があれば置換 -->
+<meta property="og:url" content="https://H11U.github.io/ShinePost-Garapon/">
+<meta property="og:image" content="https://H11U.github.io/ShinePost-Garapon/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
 
 <style>
@@ -193,7 +193,7 @@ const SONG_VARIANTS = [
   { "variantId": "songv_042", "title": "O・NE・GA・I⭐︎WISH", "titleKey": "（Onegai_Wish）", "members": 5 },
   { "variantId": "songv_043", "title": "O・NE・GA・I⭐︎WISH(3人用)", "titleKey": "（Onegai_Wish）", "members": 3 },
   { "variantId": "songv_044", "title": "Hello, My Sunshine", "titleKey": "（Hello_My_Sunshine）", "members": 5 },
-  { "variantId": "songv_045", "title": "僕たちには歌がある(2人用）", "titleKey": "（Bokutachi_Niwa_Uta_Ga_Aru）", "members": 3 }
+  { "variantId": "songv_045", "title": "僕たちには歌がある(2人用）", "titleKey": "（Bokutachi_Niwa_Uta_Ga_Aru）", "members": 2 }
 ];
 
 /* =========================
@@ -302,6 +302,7 @@ const allowSameChk = document.querySelector("#allowSame");
 let lastSeed = "";                             // 直近のシード
 let lockedSetPos = { 0:null, 1:null, 2:null, 3:null, 4:null }; // pos→variantId
 let lockedPerformers = { 0:[], 1:[], 2:[], 3:[], 4:[] };        // pos→memberId[]
+let currentResult = null;
 
 function setStatus(html, kind=""){
   msg.className = kind ? kind : "";
@@ -614,12 +615,12 @@ function runOnce(){
 }
 
 function shareLink(){
-  // 結果はURLに含めない（ベースURLのみ）
-  const base = location.origin + location.pathname;
+  const base = getBaseUrl(); // ← location.origin + location.pathname から統一
   navigator.clipboard.writeText(base)
     .then(()=> setStatus("アプリURLをコピーしました。", "success"))
     .catch(()=> setStatus("URLのコピーに失敗しました。手動で共有してください。", "error"));
 }
+
 
 /* =========================
    起動
@@ -650,16 +651,42 @@ function buildTweetText(result){
   lines.push("本日のセトリ!");
   result.setlist.forEach((track, i) => {
     const no = i + 1;
-    const title = track.title; // 例：（TOKYO ...（3人用））
+    // 曲タイトル整形
+    let title = track.title
+      .replace("（2人用）", "②")
+      .replace("（3人用）", "③")
+      .replace("（5人用）", "⑤"); // 念のため
+
+    // 出演者名（省略なし）
     const names = track.performers.map(id => FIRST_NAME_BY_ID.get(id) || "").join(" ");
+
+    // 5曲目のタイトルだけ省略処理
+    if (i === 4) {
+      // 一旦追加して長さを見積もり
+      const previewLines = lines.concat([`${no}　${title}`, names, "", getBaseUrl(), "#シャインポスト"]);
+      const previewText = previewLines.join("\n");
+      if (previewText.length > 280) {
+        title = title.slice(0, Math.max(0, 20)) + "..."; 
+      }
+    }
+
     lines.push(`${no}　${title}`);
     lines.push(names);
   });
   lines.push(""); // 空行
   lines.push(getBaseUrl());
   lines.push("#シャインポスト");
-  return lines.join("\n");
+
+  let text = lines.join("\n");
+  if (text.length > 280) {
+    // 念のため最後に全体チェック
+    const lastIdx = lines.length - 3; // 5曲目タイトル行のインデックス
+    lines[lastIdx] = lines[lastIdx].slice(0, 20) + "...";
+    text = lines.join("\n");
+  }
+  return text;
 }
+
 
 function shareToX(){
   if (!currentResult){
