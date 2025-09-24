@@ -651,24 +651,8 @@ function buildTweetText(result){
   lines.push("本日のセトリ!");
   result.setlist.forEach((track, i) => {
     const no = i + 1;
-
-    // 曲タイトル整形
-    let title = track.title
-      .replace("（2人用）", "②")
-      .replace("（3人用）", "③");
-
-    // 出演者名（省略なし）
+    const title = track.title; 
     const names = track.performers.map(id => FIRST_NAME_BY_ID.get(id) || "").join(" ");
-
-    // 5曲目のタイトルは必ず末尾を省略
-    if (i === 4) {
-      if (title.length > 5) {
-        title = title.slice(0, title.length - 5) + "...";
-      } else {
-        title = title + "..."; // 念のため短い場合
-      }
-    }
-
     lines.push(`${no}　${title}`);
     lines.push(names);
   });
@@ -676,10 +660,14 @@ function buildTweetText(result){
   lines.push(getBaseUrl());
   lines.push("#シャインポスト");
 
-  // 今回は280字制限チェックは外す
-  return lines.join("\n");
-}
+  let text = lines.join("\n");
 
+  // ★ 280字制限を超えたら切り詰める
+  if (text.length > 280) {
+    text = text.slice(0, 279) + "…";
+  }
+  return text;
+}
 
 
 function shareToX(){
