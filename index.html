@@ -673,7 +673,12 @@ function shareToX(){
   const intent = `${url}?text=${encodeURIComponent(text)}`;
   window.open(intent, "_blank", "noopener,noreferrer");
 }
-
+  
+<footer style="margin-top:2em; font-size:0.8em; color:#666; text-align:center;">
+  本サイトは KONAMI 公式の『シャインポスト』とは一切関係ありません。  
+  非公式のファン制作コンテンツです。
+</footer>
+  
 document.querySelector("#shareX").addEventListener("click", shareToX);
 allowSameChk.checked = false; // デフォルト：同名禁止
 renderLocks();
