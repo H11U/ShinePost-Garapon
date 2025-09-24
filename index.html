@@ -6,7 +6,7 @@
 <title>シャインポスト｜ライブメンバー抽選機</title>
 <meta property="og:type" content="website">
 <meta property="og:title" content="シャインポスト｜ライブメンバー抽選機">
-<meta property="og:description" content="抽選ボタンひとつで、5人のラインナップと5曲のセットリストをランダム生成！固定や同名曲許可も対応。">
+<meta property="og:description" content="抽選ボタンを押すと、5人のラインナップと5曲のセットリストをランダム生成します。メンバーと曲の固定や同名曲許可も対応。">
 <meta property="og:url" content="https://H11U.github.io/ShinePost-Garapon/">
 <meta property="og:image" content="https://H11U.github.io/ShinePost-Garapon/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -76,9 +76,8 @@
       <button id="shareX" class="ghost">Xで共有</button>
       <label class="switch">
         <input type="checkbox" id="allowSame" />
-        <span>同名曲（titleKey）を許可</span>
+        <span>同じ曲の人数違いを許可</span>
       </label>
-      <span class="muted small">※ シード入力は不要。ボタンを押すたびに結果が変わります。</span>
     </div>
   </section>
 
@@ -98,7 +97,6 @@
         <span class="muted small" id="lockSongCount"></span>
       </div>
       <div id="songsLock" class="scroll"></div>
-      <div class="muted small">※ デフォルトでは同名（titleKey）重複は不可。スイッチONで同名の別バージョンも同居可。</div>
     </div>
   </section>
 </main>
@@ -310,6 +308,27 @@ function setStatus(html, kind=""){
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&lt;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
 
+/* --- 依存関係ユーティリティ（追加） --- */
+function isMemberUsedAnywhere(memberId){
+  return Object.values(lockedPerformers).some(arr => arr && arr.includes(memberId));
+}
+function uncheckPerfCheckboxInResults(pos, memberId){
+  const sel = `.lock-perf[data-pos="${pos}"][data-memberid="${CSS.escape(memberId)}"]`;
+  const el = results.querySelector(sel);
+  if (el) el.checked = false;
+}
+function uncheckAllPerfOfPos(pos){
+  results.querySelectorAll(`.lock-perf[data-pos="${pos}"]`).forEach(el => { el.checked = false; });
+}
+function uncheckPosLockInResults(pos){
+  const el = results.querySelector(`.lock-pos[data-pos="${pos}"]`);
+  if (el) el.checked = false;
+}
+function membersFixedInPos(pos){
+  return (lockedPerformers[pos] || []).length;
+}
+
+
 /* --- 固定パネル描画 --- */
 function renderLocks(){
   // メンバー固定（最大5）
@@ -403,36 +422,73 @@ document.addEventListener("change", (e)=>{
   if (e.target.matches(".lock-m")){
     // 6人目は無効（UIで弾いているが、直接属性書換対策で二重ガード）
     if (getLockedMemberIds().length > 5){ e.target.checked = false; }
-    // パネルからメンバーを外したら、出演者固定にも反映して外す
+    const removedId = e.target.value;
+
     if (!e.target.checked){
-      const removedId = e.target.value;
+      // メンバー候補をOFF → 全セトリから出演者固定を外す
       for (let pos=0; pos<5; pos++){
-        if (lockedPerformers[pos]) lockedPerformers[pos] = lockedPerformers[pos].filter(id => id !== removedId);
+        if (lockedPerformers[pos]){
+          const before = lockedPerformers[pos].length;
+          lockedPerformers[pos] = lockedPerformers[pos].filter(id => id !== removedId);
+          if (before !== lockedPerformers[pos].length){
+            // 結果側チェックも外す
+            uncheckPerfCheckboxInResults(pos, removedId);
+          }
+          // その曲に固定出演者がゼロなら 曲固定OFF＆位置固定OFF
+          if (membersFixedInPos(pos) === 0 && lockedSetPos[pos]){
+            // 曲候補側もOFFに（「そのvariantのチェック」を外す）
+            const vid = lockedSetPos[pos];
+            const box = document.querySelector(`.lock-s[value="${CSS.escape(vid)}"]`);
+            if (box) box.checked = false;
+            lockedSetPos[pos] = null;
+            // 結果側の位置固定チェックも外す
+            uncheckPosLockInResults(pos);
+          }
+        }
       }
     }
     enforceMemberLimitUI();
+    // 曲側の制約（同名や上限）も念のため更新
+    enforceSongLimitAndTitleRuleUI();
   }
 
   if (e.target.matches(".lock-s")){
-    // 6曲目は禁止
+    // 6曲目は無効
     if (getLockedVariantIds().length > 5){ e.target.checked = false; }
-    enforceSongLimitAndTitleRuleUI();
 
-    // 曲を外したら、同variantの位置固定と出演者固定も解除（同期）
     if (!e.target.checked){
+      // 曲候補をOFF → そのvariantが固定されている全ポジションを解除
       const vid = e.target.value;
       for (let pos=0; pos<5; pos++){
-        if (lockedSetPos[pos] === vid) lockedSetPos[pos] = null;
-        // 出演者固定は「その位置の曲がvidである場合のみ」意味があるため、
-        // 明示解除までは保持。次回描画時に曲が違えば無効化される。
+        if (lockedSetPos[pos] === vid){
+          // 出演者固定も全解除
+          lockedPerformers[pos] = [];
+          uncheckAllPerfOfPos(pos);
+          // 位置固定解除
+          lockedSetPos[pos] = null;
+          uncheckPosLockInResults(pos);
+        }
       }
+      // この曲の固定を外した結果、他曲でも使われていないメンバーは候補からも外す
+      // （＝全曲を見て、そのメンバーが固定に1度も使われていなければメンバー固定を外す）
+      MEMBERS.forEach(m => {
+        if (!isMemberUsedAnywhere(m.id)){
+          const mb = document.querySelector(`.lock-m[value="${CSS.escape(m.id)}"]`);
+          if (mb) mb.checked = false;
+        }
+      });
     }
+
+    enforceSongLimitAndTitleRuleUI();
+    // メンバー側UIも更新
+    enforceMemberLimitUI();
   }
 
   if (e.target === allowSameChk){
     enforceSongLimitAndTitleRuleUI();
   }
 });
+
 
 /* =========================
    結果描画（横並びラインナップ／位置＆出演者固定UI）
@@ -648,7 +704,7 @@ const FIRST_NAME_BY_ID = new Map(MEMBERS.map(m => [m.id, m.firstName || m.name])
 // 結果からポスト用テキストを生成（firstNameのみ）
 function buildTweetText(result){
   const lines = [];
-  lines.push("本日のセトリ!");
+  lines.push("今回のセトリ");
   result.setlist.forEach((track, i) => {
     const no = i + 1;
     const title = track.title; 
@@ -682,8 +738,7 @@ allowSameChk.checked = false; // デフォルト：同名禁止
 renderLocks();
 </script>
   <footer style="margin-top:2em; font-size:0.8em; color:#666; text-align:center;">
-  本サイトは『シャインポスト』シリーズおよび KONAMI 公式ゲーム
-  『シャインポスト Be Your アイドル！』とは一切関係ありません。<br>
+  本サイトは『シャインポスト』シリーズおよび KONAMI『シャインポスト Be Your アイドル！』とは一切関係ありません。<br>
   非公式のファン制作コンテンツです。
 </footer>
 </body>
