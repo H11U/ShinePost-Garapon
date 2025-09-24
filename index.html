@@ -679,10 +679,9 @@ function buildTweetText(result){
 
   let text = lines.join("\n");
   if (text.length > 280) {
-    // 念のため最後に全体チェック
-    const lastIdx = lines.length - 3; // 5曲目タイトル行のインデックス
-    lines[lastIdx] = lines[lastIdx].slice(0, 20) + "...";
-    text = lines.join("\n");
+  const titleIdx = 9; // 5曲目タイトル行のインデックス
+  lines[titleIdx] = lines[titleIdx].slice(0, 20) + "...";
+  text = lines.join("\n");
   }
   return text;
 }
