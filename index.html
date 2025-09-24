@@ -660,6 +660,16 @@ function buildTweetText(result){
     // 出演者名（省略なし）
     const names = track.performers.map(id => FIRST_NAME_BY_ID.get(id) || "").join(" ");
 
+    // 5曲目のタイトルだけ省略処理
+    if (i === 4) {
+      // 一旦追加して長さを見積もり
+      const previewLines = lines.concat([`${no}　${title}`, names, "", getBaseUrl(), "#シャインポスト"]);
+      const previewText = previewLines.join("\n");
+      if (previewText.length > 280) {
+        title = title.slice(0, 20) + "...";
+      }
+    }
+
     lines.push(`${no}　${title}`);
     lines.push(names);
   });
@@ -669,15 +679,17 @@ function buildTweetText(result){
 
   let text = lines.join("\n");
 
-  // ★ 最後に1回だけ判定
+  // 280文字超えた場合の再チェック（5曲目タイトル行を動的に探す）
   if (text.length > 280) {
-    // 5曲目タイトル行は index 9 で固定
-    lines[9] = lines[9].slice(0, 20) + "...";
-    text = lines.join("\n");
+    const idx = lines.findIndex(line => line.startsWith("5　"));
+    if (idx !== -1) {
+      lines[idx] = lines[idx].slice(0, 20) + "...";
+      text = lines.join("\n");
+    }
   }
+
   return text;
 }
-
 
 
 function shareToX(){
