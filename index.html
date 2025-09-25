@@ -688,18 +688,6 @@ function shareLink(){
     .catch(()=> setStatus("URLのコピーに失敗しました。手動で共有してください。", "error"));
 }
 
-function shareX(){
-  if (!currentResult){
-    setStatus("まずは抽選してください。", "error");
-    return;
-  }
-  const text = buildTweetText(currentResult);  
-  const url = new URL("https://twitter.com/intent/tweet");
-  url.searchParams.set("text", text);
-  window.open(url.toString(), "_blank");
-}
-
-
 /* =========================
    起動
 ========================= */
@@ -738,9 +726,9 @@ function buildTweetText(result){
   lines.push(getBaseUrl());
   lines.push("#シャインポスト");
 
-  let text = lines.join("\n");
   return lines.join("\n");
 }
+
 
 
 function shareToX(){
