@@ -259,21 +259,35 @@ function drawShow({ seed, members, variants, allowSame, lockedMemberIds, lockedV
     if (!allowSame) usedTitleKeys.add(v.titleKey);
   }
 
-  // 2-3) ランダム補完
-  const rngFill = rngFor(seed, "songs:fill");
-  const pool = shuffleDet(variants, rngFill).filter(v => {
-    if (result.some(x => x && x.variantId === v.variantId)) return false;
-    if (!allowSame && usedTitleKeys.has(v.titleKey)) return false;
-    return true;
-  });
-  for (let pos=0; pos<5; pos++){
-    if (result[pos]) continue;
-    const next = pool.shift();
-    if (!next) { errors.push("曲プールが不足しています。"); break; }
-    result[pos] = next;
-    if (!allowSame) usedTitleKeys.add(next.titleKey);
+ // 2-3) ランダム補完
+const rngFill = rngFor(seed, "songs:fill");
+// ここでは variant 重複だけ弾き、titleKey は「直前採用に応じて」都度チェックする
+const pool = shuffleDet(variants, rngFill).filter(v => {
+  return !result.some(x => x && x.variantId === v.variantId);
+});
+
+for (let pos = 0; pos < 5; pos++) {
+  if (result[pos]) continue;
+
+  // allowSame=false のときは、usedTitleKeys に入っていない候補が出るまでプールから取り出す
+  let next = null;
+  while (pool.length) {
+    const cand = pool.shift();
+    if (allowSame || !usedTitleKeys.has(cand.titleKey)) {
+      next = cand;
+      break;
+    }
+    // 同名NGの場合、同じtitleKey候補はここで捨てる（以降の枠でも拾わない）
   }
-  if (errors.length) return { errors };
+
+  if (!next) { errors.push("曲プールが不足しています。"); break; }
+
+  result[pos] = next;
+  if (!allowSame) usedTitleKeys.add(next.titleKey);
+}
+
+if (errors.length) return { errors };
+
 
   // 3) 出演者割当（出演者固定は順序も固定）
   const setlist = result.map((v, pos) => {
