@@ -234,14 +234,22 @@ function drawShow({ seed, members, variants, allowSame, lockedMemberIds, lockedV
   const usedTitleKeys = new Set(); // allowSame=false なら使用済み管理
   const result = new Array(5).fill(null);
 
-  // 2-1) 位置固定配置
-  for (let pos=0; pos<5; pos++){
-    const vid = lockedSetPos[pos];
-    if (!vid) continue;
-    const v = byId.get(vid); if (!v) continue;
-    result[pos] = v;
-    if (!allowSame) usedTitleKeys.add(v.titleKey);
+  // 2-1) 位置固定配置（allowSame=false のとき同titleKeyは1つまで）
+for (let pos = 0; pos < 5; pos++) {
+  const vid = lockedSetPos[pos];
+  if (!vid) continue;
+  const v = byId.get(vid);
+  if (!v) continue;
+
+  if (!allowSame && usedTitleKeys.has(v.titleKey)) {
+    // 同名NG中に同keyの2曲目が来たら、この位置固定を無効化してスキップ
+    lockedSetPos[pos] = null;
+    continue;
   }
+  result[pos] = v;
+  if (!allowSame) usedTitleKeys.add(v.titleKey);
+}
+
 
   // 2-2) 採用固定（位置未指定）をランダム順で残枠へ
   const rngLockOrder = rngFor(seed, "songs:lockedOrder");
@@ -615,6 +623,29 @@ results.addEventListener("change", (e) => {
     const cap = Number(e.target.closest(".perf-list").getAttribute("data-cap"));
 
     if (e.target.checked){
+
+// ★ 同名NGを結果UI側でも即時に適用（allowSame=false のとき）
+const allowSameNow = allowSameChk.checked;
+if (!allowSameNow) {
+  const byIdLocal = new Map(SONG_VARIANTS.map(v => [v.variantId, v]));
+  const vThis = byIdLocal.get(vid);
+  if (vThis) {
+    const keyThis = vThis.titleKey;
+    // 既に候補パネルで同keyがチェック済み、または他posで同keyをロック済みなら拒否
+    const hasSameKeyChecked =
+      getLockedVariantIds().some(id => (byIdLocal.get(id)?.titleKey === keyThis) && id !== vid) ||
+      Object.entries(lockedSetPos).some(([p, v]) => {
+        if (String(p) === String(pos)) return false; // 自分は除外
+        const vv = byIdLocal.get(v);
+        return vv && vv.titleKey === keyThis;
+      });
+    if (hasSameKeyChecked) {
+      e.target.checked = false; // 同名NG中なので固定を許可しない
+      return;
+    }
+  }
+}
+
       // 曲固定（候補）もONにする（5曲上限チェック）
       const countSong = getLockedVariantIds().length;
       const songBox = document.querySelector(`.lock-s[value="${CSS.escape(vid)}"]`);
